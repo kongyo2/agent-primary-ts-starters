@@ -1,0 +1,25 @@
+{
+  "name": "agent-primary-ts-starters",
+  "owner": {
+    "name": "kongyo2",
+    "email": ""
+  },
+  "metadata": {
+    "description": "Agent-primary TS + npm dev tool starter skills (zod / prettier / oxlint / tsconfig). Defaults tuned for LLM-agent diff stability, line numbers, inner loop speed, and output parsability over human-readable defaults.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "agent-primary-ts-starters",
+      "description": "Bundle of 4 TS + npm dev tool starter skills designed for LLM-agent-primary workflows: ts-tsconfig-modern-strict-starter, ts-npm-prettier-starter, ts-npm-oxlint-starter, ts-npm-zod-starter.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./ts-tsconfig-modern-strict-starter",
+        "./ts-npm-prettier-starter",
+        "./ts-npm-oxlint-starter",
+        "./ts-npm-zod-starter"
+      ]
+    }
+  ]
+}
