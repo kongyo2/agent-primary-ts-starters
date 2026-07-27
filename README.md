@@ -8,7 +8,7 @@ Four `SKILL.md` guides that bootstrap a TypeScript npm project the way coding ag
 
 | Skill | What it sets up |
 | --- | --- |
-| [`ts-tsconfig-modern-strict-starter`](./ts-tsconfig-modern-strict-starter/SKILL.md) | Modern (ESNext + bundler/nodenext) and maximally strict `tsconfig.json`, tuned so `tsc --noEmit` is a fast agent inner loop. |
+| [`ts-tsconfig-modern-strict-starter`](./ts-tsconfig-modern-strict-starter/SKILL.md) | TypeScript 7 `tsconfig.json`, maximally strict and machine-verifiable: per-use-case `target`/`module`/`moduleResolution` rows, two-tier loop/gate configs, and runtime probes so a green `tsc` can't hide runtime-dead output. |
 | [`ts-npm-prettier-starter`](./ts-npm-prettier-starter/SKILL.md) | Prettier with diff-minimizing defaults (wider `printWidth`, all-trailing-commas, etc.) so single-line agent edits don't reflow surrounding code. |
 | [`ts-npm-oxlint-starter`](./ts-npm-oxlint-starter/SKILL.md) | Oxlint focused on real bugs, with stylistic noise silenced and output in `--format agent` for downstream LLM consumption. |
 | [`ts-npm-zod-starter`](./ts-npm-zod-starter/SKILL.md) | Zod with a documented boundary-only parsing convention. |

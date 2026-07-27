@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent-primary TS + npm dev tool starter skills (zod / prettier / oxlint / tsconfig). Defaults tuned for LLM-agent diff stability, line numbers, inner loop speed, and output parsability over human-readable defaults.",
-    "version": "1.0.0"
+    "version": "2.0.0"
   },
   "plugins": [
     {
