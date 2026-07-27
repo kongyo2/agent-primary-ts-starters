@@ -187,7 +187,7 @@ This template is React/DOM-shaped. Non-React, non-DOM, or framework-CLI-generate
 
 ## §2. Node.js ESM application
 
-`package.json` must have `"type": "module"`. Relative imports need `.js`.
+`package.json` must have `"type": "module"`. Relative imports need `.js`. The `es2024` row assumes a Node ≥ 22 floor — `lib: ["es2024"]` type-checks `Object.groupBy` and `Promise.withResolvers`, which Node 18/20 lack at runtime, so an older supported floor lowers `target`/`lib` per question 3 of [Before Applying Anything](#before-applying-anything).
 
 ```json
 {
@@ -297,10 +297,12 @@ So a monorepo uses build mode throughout, with `--force` standing in for the cac
 ```json
 {
   "extends": "./tsconfig.base.json",
-  "compilerOptions": { "noEmit": true, "incremental": false, "skipLibCheck": false },
+  "compilerOptions": { "noEmit": true, "incremental": false, "skipLibCheck": false, "rootDir": "." },
   "include": ["packages/*/src/**/*"]
 }
 ```
+
+The `rootDir` override is load-bearing: `${configDir}` resolves against the *extending* config, so the inherited `rootDir` lands on `<root>/src` and every `packages/*` file errors TS6059 without it.
 
 Leaves emit their own declarations under `isolatedDeclarations`, so `tsc -b --force` is also the declaration gate.
 
@@ -337,12 +339,13 @@ Don't override `allowImportingTsExtensions` here: `emitDeclarationOnly` permits 
 // tsconfig.test.json  — required wherever the main config excludes tests
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": true, "types": ["node", "vitest/globals"] },
-  "include": ["src/**/*", "test/**/*"]
+  "compilerOptions": { "noEmit": true, "rootDir": "./", "types": ["node", "vitest/globals"] },
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["dist"]
 }
 ```
 
-Set `types` to your runner's globals package. `include` in an extending config replaces the base's, so restate the source globs.
+Set `types` to your runner's globals package. Three inherited values must be overridden, not assumed: `include` in an extending config replaces the base's (restate the source globs), while `exclude` and `rootDir` merge through — left alone, the base's `**/*.test.ts` exclude silently drops every test file from the program, and files under `test/` error TS6059 for sitting outside the inherited `rootDir: "./src"` (both verified on 7.0.2, including under `noEmit`).
 
 ## §6. CommonJS
 
@@ -392,7 +395,7 @@ Every route that emits therefore ends with an execution probe, not a compile:
 
 - §2 — `node dist/index.js` after a clean build.
 - §3 — `npm pack`, install the tarball into a scratch consumer, `import` it under both `node` and a `nodenext` `tsc`, and check `--traceResolution` if either fails.
-- §4 — build with `tsc -b`, then import the downstream package from the upstream one at runtime.
+- §4 — build with `tsc -b`, then run the package that declares the `references` edge, so its emitted import of the dependency resolves at runtime — in [§4](#4-monorepo-with-project-references)'s graph, run `app`, which imports `core`.
 
 An agent that skips these will ship a package that passed every gate in this file and throws on first import.
 
