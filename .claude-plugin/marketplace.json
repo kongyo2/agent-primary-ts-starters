@@ -5,20 +5,18 @@
     "email": ""
   },
   "metadata": {
-    "description": "Agent-primary TS + npm dev tool starter skills (zod / prettier / oxlint / tsconfig). Defaults tuned for LLM-agent diff stability, line numbers, inner loop speed, and output parsability over human-readable defaults.",
-    "version": "2.0.0"
+    "description": "Agent-primary TypeScript + npm skills: one consolidated starter (tsconfig / Prettier / Oxlint) tuned for LLM-agent machine-verifiability and machine-explorability over human-readable defaults, plus an unconditional comment-removal skill built on @kongyo2/ts-comment-scanner.",
+    "version": "3.0.0"
   },
   "plugins": [
     {
       "name": "agent-primary-ts-starters",
-      "description": "Bundle of 4 TS + npm dev tool starter skills designed for LLM-agent-primary workflows: ts-tsconfig-modern-strict-starter, ts-npm-prettier-starter, ts-npm-oxlint-starter, ts-npm-zod-starter.",
+      "description": "Two TS + npm skills for LLM-agent-primary workflows: agent-primary-ts-starter (TypeScript 7 maximally strict tsconfig + Prettier + Oxlint, consolidated into one skill) and ts-comment-purge (unconditional comment removal via @kongyo2/ts-comment-scanner; directives and license headers preserved).",
       "source": "./",
       "strict": false,
       "skills": [
-        "./ts-tsconfig-modern-strict-starter",
-        "./ts-npm-prettier-starter",
-        "./ts-npm-oxlint-starter",
-        "./ts-npm-zod-starter"
+        "./agent-primary-ts-starter",
+        "./ts-comment-purge"
       ]
     }
   ]

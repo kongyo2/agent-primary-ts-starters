@@ -1,36 +1,21 @@
----
-name: ts-tsconfig-modern-strict-starter
-description: Set up a TypeScript 7 tsconfig.json with maximally strict, machine-verifiable settings tuned so the LLM agent doing the editing gets the largest possible share of its mistakes reported as compiler errors, in output it can consume. Use whenever a tsconfig.json is being created, edited, reviewed, troubleshot, or even just discussed — apply the standing policy even when the user only asks about a single option. Default to this skill instead of free-recall whenever the answer involves a tsconfig field.
----
+# tsconfig Deep Reference — TypeScript 7 Routes, Gates, Migration
 
-# TS + npm tsconfig — Maximum Strict, Agent-Verifiable
+Read this before creating or editing any tsconfig file. The design premise, the six routing questions, the `target`/`module`/`moduleResolution` trio, and the strict core live in [SKILL.md](../SKILL.md); this file holds everything needed to turn those decisions into config files that survive both the compiler and the runtime.
 
-Use whenever a `tsconfig.json` is being created, edited, reviewed, or troubleshot in a TypeScript npm project. In a monorepo, edit the workspace the user names — ask if it isn't named.
+## Contents
 
-## Design Premise
-
-The reader is an LLM agent, not a human scanning top-to-bottom.
-
-- **Every mistake a flag can catch, a flag should catch.** Agents emit plausible-wrong code faster than anyone reviews it; type errors are the only feedback that arrives unasked.
-- **The program must be legible file-by-file, without whole-program inference.** Inferred export signatures, ambient globals, and `tsc`-only path aliases are invisible to a grep, therefore invisible to the agent. Force them written down.
-- **Compiler output is a machine-consumed artifact.** Truncated types, ANSI escapes, and version-floating defaults are corruption in that channel.
-- **Prefer a checked element over a comment.** A comment rots silently; the same invariant as a type, `satisfies`, `assertNever`, or `@ts-expect-error` fails the build. See [Comments → Checked Artifacts](#comments--checked-artifacts).
-- **A green `tsc` is not a working program.** `tsc` checks types, not module resolution at runtime. Config choices that are legal to the compiler and fatal to Node are this skill's most dangerous failure mode, so every emitting route ends in a runtime probe. See [Compile-Success Is Not Runtime-Success](#compile-success-is-not-runtime-success).
-
-This does **not** justify shrinking things for readability — no splitting files to keep them short, no avoiding long unions or deep generics. Those optimize linear human reading at the cost of machine-verifiability.
-
-## Before Applying Anything
-
-Six answers decide the route. Ask for whatever isn't already evident; do not guess.
-
-1. **Who emits JS** — `tsc`, a bundler, or a runtime that strips types?
-2. **Who resolves the output** — Node, a browser via bundler, or another package's consumers? Independent of (1), and the usual source of broken configs.
-3. **Lowest supported runtime** — the actual Node/browser floor, which fixes `target` and `lib`.
-4. **JSX framework**, if any.
-5. **Test runner**, and where test files live.
-6. **Tools importing the TypeScript API** — typescript-eslint, ts-morph, Volar-based framework tooling. See [No Stable Compiler API in 7.0](#no-stable-compiler-api-in-70).
-
-Environments without a route below — Deno, Workers, Bun-only, browser-without-bundler, mixed ESM/CJS packages — get the **standing policy** (the strict flags), not a template. Their `target`/`module`/`moduleResolution`/`lib` come from that runtime's own documentation.
+- [TypeScript 7 Baseline](#typescript-7-baseline) — new defaults, hard errors, the missing compiler API
+- [Two-Tier Checking](#two-tier-checking) — loop configs vs gate configs
+- [Pick the Use Case First](#pick-the-use-case-first) — routing tree
+- [§1 Bundled app](#1-bundled-app-vite-nextjs-rspack-bun) · [§2 Node ESM app](#2-nodejs-esm-application) · [§3 Library](#3-publishable-library-emitted-by-tsc) · [§4 Monorepo](#4-monorepo-with-project-references) · [§5 Gate configs](#5-gate-configs) · [§6 CommonJS](#6-commonjs)
+- [Strict Flags Beyond `strict: true`](#strict-flags-beyond-strict-true) — per-flag rationale
+- [Compile-Success Is Not Runtime-Success](#compile-success-is-not-runtime-success) — runtime probes
+- [Path Aliases](#path-aliases-relative-js-first)
+- [Determinism and Caching Hazards](#determinism-and-caching-hazards)
+- [The Gate](#the-gate) — what CI runs beyond `tsc --noEmit`
+- [When a Setting "Isn't Working"](#when-a-setting-isnt-working)
+- [Merge Rules for an Existing tsconfig](#merge-rules-for-an-existing-tsconfig)
+- [Verification](#verification)
 
 ## TypeScript 7 Baseline
 
@@ -68,15 +53,6 @@ Anything that does `import * as ts from "typescript"` — typescript-eslint, ts-
 
 Check each tool before assuming it needs this — some vendor their own TypeScript (`attw` does) and are unaffected.
 
-## Standing Policy (override only with a stated reason)
-
-1. **Correctness** — `strict: true` plus every flag in [Strict Flags Beyond `strict`](#strict-flags-beyond-strict-true).
-2. **Legibility without inference** — `isolatedDeclarations`, `moduleDetection: "force"`, explicit `types: [...]` (never `["*"]`), `verbatimModuleSyntax` + `isolatedModules`, `erasableSyntaxOnly`.
-3. **Output as a machine channel** — `noErrorTruncation: true`, and `--pretty false` plus a pinned `--checkers` on **every** agent-facing script, not just CI.
-4. **Loop speed** — `skipLibCheck` and `incremental` on in the inner loop, off at the gate — except under `composite`, which forbids it. See [Two-Tier Checking](#two-tier-checking).
-
-Two documented exceptions, both in [§6 CommonJS](#6-commonjs): `verbatimModuleSyntax` and `erasableSyntaxOnly` cannot both be on in a CJS-authored project. When the user proposes any other loosening, ask what concrete problem they are solving before agreeing.
-
 ## Two-Tier Checking
 
 The inner loop and the gate want opposite things; collapsing them yields either a slow loop or a weak gate.
@@ -109,57 +85,7 @@ Add to §1–§3 ─────────────────────
 CommonJS anywhere ─────────────────────────────► §6  CommonJS
 ```
 
-## The `target` / `module` / `moduleResolution` Trio
-
-Co-dependent. Pick one row, don't improvise. `target`/`lib` are floors to raise deliberately, not defaults.
-
-| Scenario | `target` | `module` | `moduleResolution` |
-| --- | --- | --- | --- |
-| Bundled app | `es2024` | `preserve` | `bundler` |
-| Node.js native ESM | `es2024` | `nodenext` | `nodenext` |
-| Library **emitted by tsc** | `es2022` | `nodenext` | `nodenext` |
-| Library **emitted by a bundler** | `es2022` | `preserve` | `bundler` |
-| CommonJS authored source | `es2022` | `commonjs` | `bundler` |
-
-- **Never use `bundler` for output that `tsc` emits and Node loads.** `bundler` permits extensionless relative imports and `module: esnext`/`preserve` keeps them verbatim, so `export { x } from "./utils"` compiles clean and dies at `node dist/index.js` with `ERR_MODULE_NOT_FOUND`. `bundler` is correct only when a bundler resolves the result. This is the single most expensive mistake in this file's subject area.
-- `commonjs` + `bundler` is a **valid** combination as of 6.0 and the recommended landing spot off the removed `moduleResolution: node` — but see [§6](#6-commonjs) for the strict-core exceptions it forces.
-- `module: "preserve"` beats `"esnext"` for bundled apps: each import/export keeps its written form instead of being coerced.
-- `nodenext` requires an extension on relative imports (TS2835). Either write `.js` yourself, or write `.ts`/`.tsx` and set `rewriteRelativeImportExtensions: true`, which rewrites those suffixes on emit. It does **not** add extensions to extensionless imports; there is no route that lets you omit them.
-
-## The Strict Core
-
-Identical in every template below — copy it verbatim, then add the use-case block. §6 is the one documented exception.
-
-```json
-{
-  "compilerOptions": {
-    "skipLibCheck": true,
-    "incremental": true,
-    "moduleDetection": "force",
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "erasableSyntaxOnly": true,
-    "useDefineForClassFields": true,
-    "resolveJsonModule": true,
-    "allowJs": false,
-
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noPropertyAccessFromIndexSignature": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitOverride": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "allowUnreachableCode": false,
-    "allowUnusedLabels": false,
-    "noUncheckedSideEffectImports": true,
-
-    "noErrorTruncation": true
-  }
-}
-```
+Every template below assumes the strict core from [SKILL.md](../SKILL.md#the-strict-core) is copied in verbatim first; the blocks shown here are the use-case additions.
 
 ## §1. Bundled app (Vite, Next.js, Rspack, Bun)
 
@@ -181,13 +107,13 @@ Identical in every template below — copy it verbatim, then add the use-case bl
 }
 ```
 
-`dom.iterable` and `dom.asynciterable` are folded into `dom` as of 6.0 — listing them is a no-op. Drop `"dom"` for non-browser code. JSX varies by framework and the framework's own docs win: React and Preact both use `react-jsx` (Preact adds `"jsxImportSource": "preact"`), Solid uses `"jsx": "preserve"` with `"jsxImportSource": "solid-js"` and lets its Babel preset transform. `types: []` is right only if the app uses no ambient globals — otherwise list exactly what it needs (`["node"]`, `["vite/client"]`). The `es2024` pair assumes an evergreen-browser floor: a supported browser without the full ES2024 surface lowers `target`/`lib` per question 3 of [Before Applying Anything](#before-applying-anything) — `lib` is what stands between a green build and a missing built-in at runtime.
+`dom.iterable` and `dom.asynciterable` are folded into `dom` as of 6.0 — listing them is a no-op. Drop `"dom"` for non-browser code. JSX varies by framework and the framework's own docs win: React and Preact both use `react-jsx` (Preact adds `"jsxImportSource": "preact"`), Solid uses `"jsx": "preserve"` with `"jsxImportSource": "solid-js"` and lets its Babel preset transform. `types: []` is right only if the app uses no ambient globals — otherwise list exactly what it needs (`["node"]`, `["vite/client"]`). The `es2024` pair assumes an evergreen-browser floor: a supported browser without the full ES2024 surface lowers `target`/`lib` per question 3 of [Before Any tsconfig Decision](../SKILL.md#before-any-tsconfig-decision) — `lib` is what stands between a green build and a missing built-in at runtime.
 
 This template is React/DOM-shaped. Non-React, non-DOM, or framework-CLI-generated projects take the strict core and their own trio row.
 
 ## §2. Node.js ESM application
 
-`package.json` must have `"type": "module"`. Relative imports need `.js`. The `es2024` row assumes a Node ≥ 22 floor — `lib: ["es2024"]` type-checks `Object.groupBy` and `Promise.withResolvers`, which Node 18/20 lack at runtime, so an older supported floor lowers `target`/`lib` per question 3 of [Before Applying Anything](#before-applying-anything). Pin `@types/node` to the floor's major (`npm i -D @types/node@22`): `lib` constrains ECMAScript built-ins only, and a newer `@types/node` happily type-checks Node APIs the floor lacks.
+`package.json` must have `"type": "module"`. Relative imports need `.js`. The `es2024` row assumes a Node ≥ 22 floor — `lib: ["es2024"]` type-checks `Object.groupBy` and `Promise.withResolvers`, which Node 18/20 lack at runtime, so an older supported floor lowers `target`/`lib` per question 3 of [Before Any tsconfig Decision](../SKILL.md#before-any-tsconfig-decision). Pin `@types/node` to the floor's major (`npm i -D @types/node@22`): `lib` constrains ECMAScript built-ins only, and a newer `@types/node` happily type-checks Node APIs the floor lacks.
 
 ```json
 {
@@ -295,7 +221,6 @@ So a monorepo uses build mode throughout, with `--force` standing in for the cac
 The dependency-types sweep that `composite` blocks runs **per leaf** — each `tsconfig.libcheck.json` sits beside its leaf's config so the sweep sees that leaf's `module`/`lib`/`types`. One root-level aggregate would check every package under a single unrelated environment, losing e.g. a Node leaf's `types: ["node"]` while a browser leaf loses `dom`:
 
 ```json
-// packages/<leaf>/tsconfig.libcheck.json — one per leaf, chained explicitly in check:libs
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
@@ -310,7 +235,7 @@ The dependency-types sweep that `composite` blocks runs **per leaf** — each `t
 }
 ```
 
-Run `check:libs` after a build: `references` does not inherit through `extends`, so cross-package imports resolve into sibling `dist/` declarations. Verified split on 7.0.2: a broken `.d.ts` planted in a dependency passes `tsc -b --force` (exit 0, `skipLibCheck: true`) and fails the leaf sweep (exit 1).
+One `tsconfig.libcheck.json` per leaf, chained explicitly in `check:libs`. Run `check:libs` after a build: `references` does not inherit through `extends`, so cross-package imports resolve into sibling `dist/` declarations. Verified split on 7.0.2: a broken `.d.ts` planted in a dependency passes `tsc -b --force` (exit 0, `skipLibCheck: true`) and fails the leaf sweep (exit 1).
 
 Leaves emit their own declarations under `isolatedDeclarations`, so `tsc -b --force` is also the declaration gate.
 
@@ -318,16 +243,18 @@ Leaves emit their own declarations under `isolatedDeclarations`, so `tsc -b --fo
 
 For §1–§3. Every value is restated rather than inherited, because `extends` merges.
 
+`tsconfig.ci.json`:
+
 ```json
-// tsconfig.ci.json
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "incremental": false, "skipLibCheck": false }
 }
 ```
 
+`tsconfig.declarations.json` — §1 and §2 only; §3 already emits declarations:
+
 ```json
-// tsconfig.declarations.json  — §1 and §2 only; §3 already emits declarations
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
@@ -343,8 +270,9 @@ For §1–§3. Every value is restated rather than inherited, because `extends` 
 
 Don't override `allowImportingTsExtensions` here: `emitDeclarationOnly` permits it, and forcing it off breaks a §1 project that imports with `.ts` extensions.
 
+`tsconfig.test.json` — required wherever the main config excludes tests:
+
 ```json
-// tsconfig.test.json  — required wherever the main config excludes tests
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "noEmit": true, "rootDir": "./", "types": ["node", "vitest/globals"] },
@@ -353,7 +281,7 @@ Don't override `allowImportingTsExtensions` here: `emitDeclarationOnly` permits 
 }
 ```
 
-Set `types` to your runner's globals package. Three inherited values must be overridden, not assumed: `include` in an extending config replaces the base's (restate the source globs), while `exclude` and `rootDir` merge through — left alone, the base's `**/*.test.ts` exclude silently drops every test file from the program, and files under `test/` error TS6059 for sitting outside the inherited `rootDir: "./src"` (both verified on 7.0.2, including under `noEmit`). The loop keeps the inherited `skipLibCheck: true`; the gate reruns this config cache-free with the sweep on (`typecheck:test:ci` in [Scripts](#scripts)) because test-only dependencies like `vitest/globals` are otherwise never lib-checked anywhere.
+Set `types` to your runner's globals package. Three inherited values must be overridden, not assumed: `include` in an extending config replaces the base's (restate the source globs), while `exclude` and `rootDir` merge through — left alone, the base's `**/*.test.ts` exclude silently drops every test file from the program, and files under `test/` error TS6059 for sitting outside the inherited `rootDir: "./src"` (both verified on 7.0.2, including under `noEmit`). The loop keeps the inherited `skipLibCheck: true`; the gate reruns this config cache-free with the sweep on (`typecheck:test:ci` in [SKILL.md's scripts](../SKILL.md#npm-scripts)) because test-only dependencies like `vitest/globals` are otherwise never lib-checked anywhere.
 
 ## §6. CommonJS
 
@@ -425,27 +353,6 @@ When an alias is genuinely wanted, use `package.json` `imports` rather than tsco
 
 `baseUrl` is removed in 7.0; if `paths` is unavoidable, entries are now relative to the project root.
 
-## Scripts
-
-Single-project (§1–§3). Monorepos use the build-mode scripts in [§4](#4-monorepo-with-project-references) instead.
-
-```json
-{
-  "scripts": {
-    "typecheck": "tsc --noEmit --pretty false --checkers 4",
-    "typecheck:watch": "tsc --noEmit --watch --pretty false --checkers 4",
-    "typecheck:test": "tsc -p tsconfig.test.json --pretty false --checkers 4",
-    "typecheck:test:ci": "tsc -p tsconfig.test.json --skipLibCheck false --incremental false --pretty false --checkers 4",
-    "typecheck:ci": "tsc -p tsconfig.ci.json --pretty false --checkers 4",
-    "check:decl": "tsc -p tsconfig.declarations.json --pretty false --checkers 4"
-  }
-}
-```
-
-The same `--pretty false` and `--checkers N` on every one of them: an agent reads all of these, so any script that keeps ANSI output or floats its checker count is an inconsistency the agent has to absorb. When `typecheck` already targets another tool, leave it and add `typecheck:tsc` alongside. `check:decl` exists only where `tsconfig.declarations.json` does (§1/§2) — pointing it at a §3 project is a TS5058 missing-file error; there the emitting build is its own declaration gate, so drop the script.
-
-`--noEmit` is only meaningful in `typecheck` for a route whose base doesn't already set it; for §2 and §3 it overrides an emitting config, which is what you want in the loop.
-
 ## Determinism and Caching Hazards
 
 Non-determinism hurts an agent more than a human: an agent treats every run as ground truth.
@@ -464,28 +371,9 @@ Non-determinism hurts an agent more than a human: an agent treats every run as g
 - `npm run typecheck:test:ci` — the same files, cache-free with `skipLibCheck: false`; the only sweep that reaches test-only dependencies (verified: a broken `.d.ts` in one passes every other gate)
 - `npm run check:decl` — `isolatedDeclarations` (§1/§2 only)
 - A **runtime probe** per [Compile-Success Is Not Runtime-Success](#compile-success-is-not-runtime-success) — the only gate that catches the resolver gap
-- `oxlint --type-aware --type-check --tsconfig tsconfig.ci.json` — type-aware rules, notably `no-floating-promises` and the `no-unsafe-*` family; `tsc` has no opinion on an `any` crossing a boundary. The whole setup is two devDependencies, `oxlint` plus `oxlint-tsgolint` (versioned in lockstep with TS 7.0.x), and this flag pair; it shares one program with the lint pass and can subsume the separate `tsc --noEmit` step in CI. The companion oxlint skill covers only the untyped lint config.
+- `oxlint --type-aware --type-check` — type-aware rules, notably `no-floating-promises` and the `no-unsafe-*` family; `tsc` has no opinion on an `any` crossing a boundary. The whole setup is two devDependencies, `oxlint` plus `oxlint-tsgolint` (versioned in lockstep with TS 7.0.x), and this flag pair; it shares one program with the lint pass and can subsume the separate `tsc --noEmit` step in CI. Type-aware linting discovers the relevant `tsconfig.json` for each file automatically — the `--tsconfig` override flag is *not* respected — and requires a TS 7-compatible config; in a monorepo, build dependent packages first so their `.d.ts` files exist. The Oxlint section in [SKILL.md](../SKILL.md#oxlint) covers the untyped lint config.
 - `attw --pack .` + `publint --strict` for libraries — mechanically verify the `exports` map instead of eyeballing it
 - `type-coverage --at-least 99 --strict` — a number in CI instead of a belief about leftover `any`. Its peer range admits `typescript@7`, but 7.0 ships no JS API and it crashes at load — point it at the 6.0 alias.
-
-## Comments → Checked Artifacts
-
-When you find the left column, replace it with the right column.
-
-| Rotting comment | Checked replacement |
-| --- | --- |
-| `// @ts-ignore` | `// @ts-expect-error <reason>` — errors once fixed, so it self-deletes |
-| `// this is a user id, not a name` | branded type: `string & { readonly brand: unique symbol }` |
-| `// one of: 'a' \| 'b' \| 'c'` | literal union, or `as const` object + `(typeof X)[keyof typeof X]` |
-| `// handle new variants here too` | `default: return assertNever(x)` |
-| `// keep in sync with the API schema` | derive it: `z.infer<typeof S>`, `keyof`, `Extract`, mapped types |
-| `// keep in sync with the config` | `satisfies Config` on the literal |
-| `// this cast is safe because …` | a validator that actually checks, plus tests — a hand-written `x is T` predicate can still lie, so prefer an inferred predicate or a schema parse over asserting one |
-| `// returns null if not found` | put it in the return type: `T \| null` |
-| `// this function's shape is …` | `isolatedDeclarations` makes the signature mandatory |
-| `// subtle overload, don't break it` | type-level test: `expectTypeOf` (vitest) or `tsd` in `*.test-d.ts` |
-
-Keep two comment forms, because they are machine-consumed: `@deprecated` and `@ts-expect-error`.
 
 ## When a Setting "Isn't Working"
 
@@ -519,13 +407,11 @@ Steps 6 and 12 produce hundreds of errors on a codebase that has never had them.
 
 ## Verification
 
-- `npx tsc --showConfig -p <each config>` matches the two-tier table — check resolved values per file, not the snippets.
-- `npm run typecheck`, `typecheck:test`, `typecheck:test:ci`, `typecheck:ci` (with no `.tsbuildinfo` present), and — §1/§2 — `check:decl` all exit 0.
+Beyond the checks in [SKILL.md](../SKILL.md#verification):
+
 - `typecheck:ci` leaves no build artifacts behind; `check:decl` leaves no `.tsbuildinfo`.
 - The emitted program actually runs — §2 executes, §3 installs from `npm pack` into a scratch consumer and resolves both JS and types, §4 imports across packages.
 - On a monorepo, introduce a deliberate type error in one leaf and confirm the root gate exits non-zero. If it exits 0, the gate isn't traversing references.
-- A deliberate `const x: string = arr[0]` errors — confirms `noUncheckedIndexedAccess` is live.
-- An error containing a long type shows it in full, not `... N more ...` — confirms `noErrorTruncation`.
 - With `declarationMap: true`, `.d.ts.map` files appear next to the `.d.ts` (verified on 7.0.2); early-7.0 reports of gappy maps mean spot-check a jump-to-definition rather than assuming their content.
 
 ## References
@@ -537,4 +423,4 @@ Steps 6 and 12 produce hundreds of errors on a codebase that has never had them.
 - Project references: <https://www.typescriptlang.org/docs/handbook/project-references>
 - Node.js subpath imports: <https://nodejs.org/api/packages.html#subpath-imports>
 - Node.js 24.14.0 release notes (bare `#/` subpath imports): <https://nodejs.org/en/blog/release/v24.14.0>
-- Oxlint type-aware linting: <https://oxc.rs/docs/guide/usage/linter/type-aware.html>
+- Oxlint type-aware linting: <https://oxc.rs/docs/guide/usage/linter/type-aware>
