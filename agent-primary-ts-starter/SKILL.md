@@ -1,6 +1,6 @@
 ---
 name: agent-primary-ts-starter
-description: Bootstrap or harden a TypeScript npm project the agent-primary way - tsconfig.json (TypeScript 7, maximally strict, machine-verifiable), Prettier (diff- and line-number-stable formatting), and Oxlint (bug-focused linting with machine-readable output), wired together with npm scripts, CI gates, and Claude Code hooks. Use whenever a TS npm project is being created, configured, or reviewed; whenever a tsconfig.json is created, edited, reviewed, troubleshot, or even just discussed - default to this skill instead of free-recall whenever the answer involves a tsconfig field; and whenever formatting or linting is being added or tuned - even if the user never says "tsconfig", "prettier", "oxlint", "formatter", or "linter".
+description: Bootstrap or harden a TypeScript npm project the agent-primary way - tsconfig.json (TypeScript 7, maximally strict, machine-verifiable), Prettier (diff- and line-number-stable formatting), and Oxlint (bug-focused linting with machine-readable output), wired together with npm scripts and CI gates. Use whenever a TS npm project is being created, configured, or reviewed; whenever a tsconfig.json is created, edited, reviewed, troubleshot, or even just discussed - default to this skill instead of free-recall whenever the answer involves a tsconfig field; and whenever formatting or linting is being added or tuned - even if the user never says "tsconfig", "prettier", "oxlint", "formatter", or "linter".
 ---
 
 # Agent-Primary TS + npm Starter (tsconfig · Prettier · Oxlint)
@@ -16,13 +16,13 @@ The reader, editor, and primary consumer of this project is an LLM agent, not a 
 - **Tool output is a machine-consumed artifact.** Truncated types, ANSI escapes, and version-floating defaults are corruption in that channel — hence `tsc --pretty false` + `noErrorTruncation`, and `oxlint --format agent`.
 - **Edits must not disturb what they don't touch.** Formatter defaults tuned for human eyes reflow whole regions around a one-line agent edit, shifting line numbers and invalidating the `old_string` matches the agent holds for its next edits. Formatting exists to keep diffs minimal and line numbers stable.
 - **Prefer a checked element over a comment.** Inline and doc comments are not continuously maintained in AI-driven development — they rot silently. The same invariant as a type, `satisfies`, `assertNever`, or `@ts-expect-error` fails the build when it stops being true. See [Comments → Checked Artifacts](#comments--checked-artifacts).
-- **A green `tsc` is not a working program.** `tsc` checks types, not module resolution at runtime. Config choices that are legal to the compiler and fatal to Node are this skill's most dangerous failure mode, so every emitting route ends in a runtime probe — see the reference.
+- **A green `tsc` is not a working program.** `tsc` checks types, not module resolution at runtime. Config choices that are legal to the compiler and fatal to Node are this skill's most dangerous failure mode, so every emitting route ends in a runtime probe — see [Compile-Success Is Not Runtime-Success](references/tsconfig.md#compile-success-is-not-runtime-success).
 
 This does **not** justify shrinking things for readability — no splitting files to keep them short, no avoiding long unions or deep generics, no simplifying types so a human can follow them linearly. Those optimize the false premise that a human reads top-to-bottom, at the cost of machine-verifiability.
 
 ## Applying to a Project
 
-For a full bootstrap, apply in this order — each layer's verification depends on the previous one:
+For a full bootstrap, apply in this order:
 
 1. **tsconfig** — answer the [six questions](#before-any-tsconfig-decision), pick the [trio row](#the-target--module--moduleresolution-trio), copy [the strict core](#the-strict-core), then read [`references/tsconfig.md`](references/tsconfig.md) for the use-case template and gate configs. Read that file before creating or editing any tsconfig file.
 2. **Prettier** — [section below](#prettier).
@@ -97,13 +97,13 @@ Identical in every route — copy it verbatim, then add the use-case block from 
 }
 ```
 
-Per-flag rationale — what each flag catches and what it costs — is in [Strict Flags Beyond `strict: true`](references/tsconfig.md#strict-flags-beyond-strict-true).
+Per-flag rationale for the strictness flags — what each catches and what it costs — is in [Strict Flags Beyond `strict: true`](references/tsconfig.md#strict-flags-beyond-strict-true); `skipLibCheck` and `incremental` are loop-vs-gate concerns covered in [Two-Tier Checking](references/tsconfig.md#two-tier-checking).
 
 ### Standing Policy (override only with a stated reason)
 
-1. **Correctness** — `strict: true` plus every flag in the strict core.
+1. **Correctness** — `strict: true` plus every flag in [Strict Flags Beyond `strict: true`](references/tsconfig.md#strict-flags-beyond-strict-true).
 2. **Legibility without inference** — `isolatedDeclarations` (per route), `moduleDetection: "force"`, explicit `types: [...]` (never `["*"]`), `verbatimModuleSyntax` + `isolatedModules`, `erasableSyntaxOnly`.
-3. **Output as a machine channel** — `noErrorTruncation: true`, and `--pretty false` plus a pinned `--checkers` on **every** agent-facing `tsc` script, not just CI; `--format agent` on every lint run.
+3. **Output as a machine channel** — `noErrorTruncation: true`, and `--pretty false` plus a pinned `--checkers` on **every** agent-facing script, not just CI.
 4. **Loop speed** — `skipLibCheck` and `incremental` on in the inner loop, off at the gate — except under `composite`, which forbids it. See [Two-Tier Checking](references/tsconfig.md#two-tier-checking).
 
 Two documented exceptions, both in [§6 CommonJS](references/tsconfig.md#6-commonjs): `verbatimModuleSyntax` and `erasableSyntaxOnly` cannot both be on in a CJS-authored project. When the user proposes any other loosening, ask what concrete problem they are solving before agreeing.
@@ -156,7 +156,7 @@ When `.prettierrc.*` already exists, keep it and surface the diff against the va
 
 ## Oxlint
 
-The linter's consumer is the agent, so error-level findings are real bugs, style is the formatter's problem, and output is machine-parseable. Oxlint ships a dedicated `agent` value for `--format` for exactly this.
+The linter's consumer is the agent, so error-level findings are real bugs, style is the formatter's problem, and output is machine-parseable. Oxlint ships a dedicated `agent` value for `--format` — an output format the oxc team designed explicitly for LLM agent consumption — which the scripts below wire into the default `lint` command.
 
 Install: `npm add -D oxlint`. When oxlint is already declared, keep its current version unless the user asks for a change.
 
@@ -214,7 +214,7 @@ One block wires all three surfaces. Add to `package.json` (single-project; monor
 ```
 
 - The same `--pretty false` and `--checkers N` on every `tsc` script: an agent reads all of them, so a script that keeps ANSI output or floats its checker count is an inconsistency the agent has to absorb.
-- `--noEmit` in `typecheck` overrides the emitting configs of [§2/§3](references/tsconfig.md#2-nodejs-esm-application) — what you want in the loop.
+- `--noEmit` is only meaningful in `typecheck` for a route whose base doesn't already set it; for [§2](references/tsconfig.md#2-nodejs-esm-application)/[§3](references/tsconfig.md#3-publishable-library-emitted-by-tsc) it overrides an emitting config, which is what you want in the loop.
 - `check:decl` exists only where `tsconfig.declarations.json` does (§1/§2); pointing it at a §3 project is a TS5058 missing-file error — there the emitting build is its own declaration gate, so drop the script.
 - `lint:fix` applies auto-fixable rule corrections in one pass — oxlint's `--fix` is the safe tier that doesn't change behavior.
 - `lint:strict` promotes warnings to a non-zero exit code for CI gating.
@@ -245,11 +245,11 @@ Keep two comment forms, because they are machine-consumed: `@deprecated` and `@t
 
 ## Verification
 
-- `npx tsc --showConfig -p <each config>` matches the two-tier table in the reference — check resolved values per file, not the snippets.
+- `npx tsc --showConfig -p <each config>` matches the table in [Two-Tier Checking](references/tsconfig.md#two-tier-checking) — check resolved values per file, not the snippets.
 - `npm run typecheck`, `typecheck:test`, `typecheck:test:ci`, `typecheck:ci` (with no `.tsbuildinfo` present), and — §1/§2 — `check:decl` all exit 0.
 - `npm run lint` exits 0 on a clean repository; `.oxlintrc.json` and `.prettierrc.json` parse as valid JSON.
-- `npm run format:check` exits 0 after a one-time `npm run format`.
-- The emitted program actually runs — the runtime probe for the chosen route in [Compile-Success Is Not Runtime-Success](references/tsconfig.md#compile-success-is-not-runtime-success). A green `tsc` plus a failed `node dist/index.js` means the trio row is wrong, not the code.
+- `npm run format` runs without error across the repository; `npm run format:check` exits 0 after a one-time `npm run format`.
+- The emitted program actually runs — the runtime probe for the chosen route in [Compile-Success Is Not Runtime-Success](references/tsconfig.md#compile-success-is-not-runtime-success). A green `tsc` plus a failed `node dist/index.js` is a resolver-level config gap, not a code bug — diagnose against that section's cause list.
 - A deliberate `const x: string = arr[0]` errors — confirms `noUncheckedIndexedAccess` is live.
 - An error containing a long type shows it in full, not `... N more ...` — confirms `noErrorTruncation`.
 
