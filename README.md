@@ -1,17 +1,15 @@
 # agent-primary-ts-starters
 
-> Agent-primary TypeScript + npm starter skills (tsconfig / Prettier / Oxlint / Zod). Defaults tuned for LLM-agent diff stability, line-number stability, and inner-loop speed over human-readable conventions.
+> Agent-primary TypeScript + npm skills. Defaults tuned for LLM-agent machine-verifiability and machine-explorability — diff stability, line-number stability, inner-loop speed, and parseable tool output over human-readable conventions.
 
-Four `SKILL.md` guides that bootstrap a TypeScript npm project the way coding agents want it — stable line numbers across edits, single-line diffs, fast `tsc --noEmit` feedback, and parseable lint output.
+Two `SKILL.md` guides built on one premise: the reader, editor, and primary consumer of a modern TS codebase is a coding agent. Mistakes should snag on the type checker, the tests, and the linter — not on a human reading linearly — and information worth keeping lives in checked elements (types, `satisfies`, tests), not in comments that no one maintains.
 
 ## Skills
 
-| Skill | What it sets up |
+| Skill | What it does |
 | --- | --- |
-| [`ts-tsconfig-modern-strict-starter`](./ts-tsconfig-modern-strict-starter/SKILL.md) | TypeScript 7 `tsconfig.json`, maximally strict and machine-verifiable: per-use-case `target`/`module`/`moduleResolution` rows, two-tier loop/gate configs, and runtime probes so a green `tsc` can't hide runtime-dead output. |
-| [`ts-npm-prettier-starter`](./ts-npm-prettier-starter/SKILL.md) | Prettier with diff-minimizing defaults (wider `printWidth`, all-trailing-commas, etc.) so single-line agent edits don't reflow surrounding code. |
-| [`ts-npm-oxlint-starter`](./ts-npm-oxlint-starter/SKILL.md) | Oxlint focused on real bugs, with stylistic noise silenced and output in `--format agent` for downstream LLM consumption. |
-| [`ts-npm-zod-starter`](./ts-npm-zod-starter/SKILL.md) | Zod with a documented boundary-only parsing convention. |
+| [`agent-primary-ts-starter`](./agent-primary-ts-starter/SKILL.md) | The consolidated starter: TypeScript 7 `tsconfig.json` (maximally strict, machine-verifiable, per-use-case routes with two-tier loop/gate configs and runtime probes), Prettier with diff-minimizing settings, Oxlint focused on real bugs with `--format agent` output, and the npm scripts wiring them together. Deep tsconfig doctrine lives in [`references/tsconfig.md`](./agent-primary-ts-starter/references/tsconfig.md). |
+| [`ts-comment-purge`](./ts-comment-purge/SKILL.md) | Unconditional comment removal via [`@kongyo2/ts-comment-scanner`](https://www.npmjs.com/package/@kongyo2/ts-comment-scanner): AST-based, strings/templates/regex/JSX never touched, directives and license headers preserved, `--diff` scoping for post-agent-session cleanup. |
 
 ## Quickstart
 
@@ -22,7 +20,7 @@ The companion CLI [`@kongyo2/apts`](https://www.npmjs.com/package/@kongyo2/apts)
 npx @kongyo2/apts@latest search "set up strict tsconfig"
 
 # Pull a guide into context
-npx @kongyo2/apts@latest retrieve ts-tsconfig-modern-strict-starter
+npx @kongyo2/apts@latest retrieve agent-primary-ts-starter
 
 # List the whole catalog
 npx @kongyo2/apts@latest list
