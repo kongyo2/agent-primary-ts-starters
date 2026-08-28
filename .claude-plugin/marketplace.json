@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "agent-primary-ts-starters",
-      "description": "Two TS + npm skills for LLM-agent-primary workflows: agent-primary-ts-starter (TypeScript 7 maximally strict tsconfig + Prettier + Oxlint, consolidated into one skill) and ts-comment-purge (unconditional comment removal via @kongyo2/ts-comment-scanner, directives excluded).",
+      "description": "Two TS + npm skills for LLM-agent-primary workflows: agent-primary-ts-starter (TypeScript 7 maximally strict tsconfig + Prettier + Oxlint, consolidated into one skill) and ts-comment-purge (unconditional comment removal via @kongyo2/ts-comment-scanner; directives and license headers preserved).",
       "source": "./",
       "strict": false,
       "skills": [
